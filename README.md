@@ -10,6 +10,6 @@ BackendHPP.postman_collection.json
 - TransactionInsertSeeder untuk data sisipan
 - TransactionEndSeeder untuk data lengkap seperti pada contoh
 ### Command Seeder
-php artisan db:seed --class=TransactionSeeder
-php artisan db:seed --class=TransactionInsertSeeder
-php artisan db:seed --class=TransactionEndSeeder
+- php artisan db:seed --class=TransactionSeeder
+- php artisan db:seed --class=TransactionInsertSeeder
+- php artisan db:seed --class=TransactionEndSeeder
