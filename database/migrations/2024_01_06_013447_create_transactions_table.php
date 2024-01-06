@@ -23,6 +23,7 @@ return new class extends Migration
             $table->decimal('value_balance', 10, 2);
             $table->decimal('hpp', 10, 4);
             $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at')->useCurrent();
         });
     }
 
