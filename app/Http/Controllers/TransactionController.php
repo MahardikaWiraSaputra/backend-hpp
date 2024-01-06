@@ -58,6 +58,17 @@ class TransactionController extends Controller {
             // Jika ini transaksi pertama, langsung gunakan harga dari inputan
             $cost = $price;
             $totalCost = $qty * $cost;
+
+            // Ambil data transaksi terakhir untuk perhitungan Qty Balance dan Value Balance
+            $previousQtyBalance = $previousTransaction ? $previousTransaction->qty_balance : 0;
+            $previousValueBalance = $previousTransaction ? $previousTransaction->value_balance : 0;
+
+            // Hitung Qty Balance dan Value Balance
+            $qtyBalance = $previousQtyBalance + $qty;
+            $valueBalance = $previousValueBalance + $totalCost;
+
+            // Hitung HPP
+            $hpp = $qtyBalance !== 0 ? $valueBalance / $qtyBalance : 0;
         }
 
         // Buat transaksi baru menggunakan Eloquent ORM
@@ -89,13 +100,17 @@ class TransactionController extends Controller {
         $date = $request->input('date');
         $type = $request->input('type');
 
-        // Mendapatkan transaksi terakhir
-        $latestTransaction = Transaction::orderBy('id', 'desc')->first();
+        // Mendapatkan transaksi terakhir sebelum id yang dituju untuk mengambil data qty untuk keperluan update Jika ada sisipan, maka akan mempengaruhi qty balance, value balance dan hpp setelahnya.
+        $latestTransaction = Transaction::where('id', '<', $id)
+        ->orderBy('id', 'desc')
+        ->first();
 
         // Validasi untuk Penjualan: pastikan stok tidak menjadi negatif
         if ($type === 'Penjualan' && $latestTransaction && $latestTransaction->qty_balance - str_replace('-','',$qty) < 0) {
             return response()->json(['message' => 'Stok tidak mencukupi untuk transaksi ini'], 400);
         }
+
+        $oldQty = $transaction->qty; // Simpan nilai qty sebelum diubah
 
         // Logika perhitungan seperti pada addTransaction
         $cost = 0;
@@ -107,17 +122,31 @@ class TransactionController extends Controller {
         if ($latestTransaction) {
             if ($type === 'Penjualan') {
                 $cost = $latestTransaction->hpp;
+                $qtyBalance = $latestTransaction->qty_balance +  $qty;
+                $valueBalance = $latestTransaction->value_balance + $totalCost;
             } else {
                 $cost = $price;
+                $qtyBalance = $latestTransaction->qty_balance + $qty;
+                $valueBalance = $latestTransaction->value_balance + $transaction->total_cost;
             }
 
             $totalCost = $qty * $cost;
-            $qtyBalance = $latestTransaction->qty_balance + $transaction->qty - $qty;
-            $valueBalance = $latestTransaction->value_balance - $transaction->total_cost + $totalCost;
+
             $hpp = $qtyBalance !== 0 ? $valueBalance / $qtyBalance : 0;
         } else {
             $cost = $price;
             $totalCost = $qty * $cost;
+
+            // Ambil data transaksi terakhir untuk perhitungan Qty Balance dan Value Balance
+            $latestQtyBalance = $latestTransaction ? $latestTransaction->qty_balance : 0;
+            $latestValueBalance = $latestTransaction ? $latestTransaction->value_balance : 0;
+
+            // Hitung Qty Balance dan Value Balance
+            $qtyBalance = $latestQtyBalance + $qty;
+            $valueBalance = $latestValueBalance + $totalCost;
+
+            // Hitung HPP
+            $hpp = $qtyBalance !== 0 ? $valueBalance / $qtyBalance : 0;
         }
 
         // Update data transaksi
@@ -133,7 +162,24 @@ class TransactionController extends Controller {
 
         $transaction->save();
 
+        // Update transaksi setelahnya jika ada perubahan pada qty
+        $this->updateFollowingTransactions($latestTransaction, $oldQty, $qty);
+
         return response()->json(['message' => 'Transaksi berhasil diperbarui'], 200);
+    }
+
+    private function updateFollowingTransactions($latestTransaction, $oldQty, $newQty) {
+        // update Jika ada sisipan, maka akan mempengaruhi qty balance, value balance dan hpp id setelahnya
+        if ($latestTransaction && $oldQty !== $newQty) {
+            $transactions = Transaction::where('id', '>', $latestTransaction->id)->get();
+
+            foreach ($transactions as $transaction) {
+                $transaction->qty_balance += ($newQty - $oldQty);
+                $transaction->value_balance += ($transaction->cost * ($newQty - $oldQty));
+                $transaction->hpp = $transaction->qty_balance !== 0 ? $transaction->value_balance / $transaction->qty_balance : 0;
+                $transaction->save();
+            }
+        }
     }
 
     public function removeTransaction($id) {
