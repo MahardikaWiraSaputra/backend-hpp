@@ -18,7 +18,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::get('/nama-endpoint', 'NamaController@fungsiGet'); // Contoh GET request
-Route::post('/transaction', 'TransactionController@addTransaction'); // Contoh POST request
+Route::get('/transaction', 'TransactionController@listTransactions');
+Route::post('/transaction', 'TransactionController@addTransaction');
 Route::put('/transaction/{id}', 'TransactionController@updateTransaction');
-// Dan seterusnya untuk HTTP verbs lainnya (PUT, DELETE, dll.)
+Route::delete('/transaction/{id}', 'TransactionController@removeTransaction');

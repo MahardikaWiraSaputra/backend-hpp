@@ -4,6 +4,17 @@ use Illuminate\Http\Request;
 use App\Models\Transaction;
 
 class TransactionController extends Controller {
+
+    public function listTransactions() {
+        $transactions = Transaction::all();
+
+        if ($transactions->isEmpty()) {
+            return response()->json(['message' => 'Tidak ada transaksi yang ditemukan'], 404);
+        }
+
+        return response()->json($transactions, 200);
+    }
+
     public function addTransaction(Request $request) {
         $qty = $request->input('qty');
         $price = $request->input('price');
@@ -49,7 +60,6 @@ class TransactionController extends Controller {
             $totalCost = $qty * $cost;
         }
 
-
         // Buat transaksi baru menggunakan Eloquent ORM
         $transaction = new Transaction();
         $transaction->qty = $qty;
@@ -69,7 +79,6 @@ class TransactionController extends Controller {
 
     public function updateTransaction(Request $request, $id) {
         $transaction = Transaction::find($id);
-        // dd($request);
 
         if (!$transaction) {
             return response()->json(['message' => 'Transaksi tidak ditemukan'], 404);
@@ -125,5 +134,37 @@ class TransactionController extends Controller {
         $transaction->save();
 
         return response()->json(['message' => 'Transaksi berhasil diperbarui'], 200);
+    }
+
+    public function removeTransaction($id) {
+        $transaction = Transaction::find($id);
+
+        if (!$transaction) {
+            return response()->json(['message' => 'Transaksi tidak ditemukan'], 404);
+        }
+
+        // Validasi untuk stok agar tidak minus
+        if ($transaction->qty_balance - $transaction->qty <= 0) {
+            return response()->json(['message' => 'Stok Tidak Boleh minus'], 400);
+        }
+
+        // Simpan informasi transaksi sebelum dihapus
+        $qty = $transaction->qty;
+        $totalCost = $transaction->total_cost;
+
+        // Hapus transaksi
+        $transaction->delete();
+
+        // Ambil transaksi terakhir setelah menghapus transaksi sebelumnya
+        $latestTransaction = Transaction::orderBy('id', 'desc')->first();
+
+        // Update Qty Balance dan Value Balance pada transaksi terakhir
+        if ($latestTransaction) {
+            $latestTransaction->qty_balance -= $qty;
+            $latestTransaction->value_balance -= $totalCost;
+            $latestTransaction->save();
+        }
+
+        return response()->json(['message' => 'Transaksi berhasil dihapus'], 200);
     }
 }
